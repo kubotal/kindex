@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Ingresses</title>
+	<style>
+		body { font-family: system-ui, sans-serif; margin: 1.5rem; line-height: 1.5; }
+		ul { list-style: none; padding: 0; }
+		li { margin: 0.35rem 0; }
+		.err { color: #b00020; }
+	</style>
+</head>
+<body>
+	<h1>Ingress links</h1>
+	{{if .Error}}
+	<p class="err">{{.Error}}</p>
+	{{else if not .Links}}
+	<p>No links.</p>
+	{{else}}
+	<ul>
+		{{range .Links}}
+		<li>
+			<a href="{{.Target}}" target="_blank" rel="noopener noreferrer">{{.Display}}</a>
+			{{if .Description}}<span> — {{.Description}}</span>{{end}}
+		</li>
+		{{end}}
+	</ul>
+	{{end}}
+</body>
+</html>

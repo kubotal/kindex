@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var flags struct {
@@ -34,12 +36,11 @@ func init() {
 }
 
 var ServeCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "Serves a http server",
+	Use:   "serve KUBECONFIG",
+	Short: "Runs an HTTP server that lists ingress links from the cluster",
+	Long:  "Starts the server using the given kubeconfig file path (for example ~/.kube/config).",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Hello World")
-
 		logger, err := misc.NewLogger(&flags.logConfig)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Unable to load logging configuration: %v\n", err)
@@ -48,17 +49,29 @@ var ServeCmd = &cobra.Command{
 
 		logger.Info("Starting http server", "port", flags.httpConfig.BindPort)
 
+		restCfg, err := clientcmd.BuildConfigFromFlags("", args[0])
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "kubeconfig: %v\n", err)
+			os.Exit(2)
+		}
+		clientset, err := kubernetes.NewForConfig(restCfg)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "kubernetes client: %v\n", err)
+			os.Exit(2)
+		}
+
 		router := http.NewServeMux()
 
 		// Setup server
 		server := httpsrv.New("ingresses", &flags.httpConfig, router)
 		ctx := logr.NewContextWithSlogLogger(context.Background(), logger)
 
+		router.Handle("GET /", handlers.IngressesHandler(clientset))
 		router.Handle("GET /favicon.ico", handlers.FaviconHandler(path.Join("resources/static", "favicon.ico")))
 
 		err = server.Start(ctx)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "%error on server launchv\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "error on server launch: %v\n", err)
 			os.Exit(1)
 		}
 
