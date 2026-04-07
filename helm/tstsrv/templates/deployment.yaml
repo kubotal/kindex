@@ -1,0 +1,90 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kindex.deploymentName" . }}
+  namespace: {{ .Release.Namespace  }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kindex.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kindex.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: main
+        args:
+          - serve
+          - {{ .Values.server.dataFolder }}
+          - --logMode={{ .Values.log.mode }}
+          - --logLevel={{ .Values.log.level }}
+          - --tls={{ .Values.server.tls }}
+          - --dumpExchanges={{ .Values.server.dumpExchanges }}
+          - --bindAddr={{ .Values.server.bindAddr }}
+          - --bindPort={{ .Values.server.bindPort }}
+          {{- if .Values.server.tls }}
+          - --certDir={{ .Values.server.certDir }}
+          - --certName={{ .Values.server.certName }}
+          - --keyName={{ .Values.server.keyName }}
+          {{- end }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{ with .Values.containerSecurityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        ports:
+          - containerPort: {{ .Values.server.bindPort }}
+            name: http
+            protocol: TCP
+        resources:
+          {{ toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+          {{ if .Values.server.tls }}
+          - mountPath: /cert/server
+            name: cert-server
+            readOnly: true
+          {{ end }}
+        {{- if .Values.extraVolumes }}
+        {{- range .Values.extraVolumes }}
+          - name: {{ .name }}
+            mountPath: {{ .mountPath }}
+        {{- end }}
+        {{- end }}
+      volumes:
+      {{ if .Values.server.tls }}
+      - name: cert-server
+        secret:
+          defaultMode: 420
+          secretName: {{ include "kindex.certificateSecretName" . }}
+      {{ end }}
+      {{- if .Values.extraVolumes }}
+      {{- range .Values.extraVolumes }}
+      - name: {{ .name }}
+        persistentVolumeClaim:
+          claimName: {{ .claimName }}
+      {{- end }}
+      {{- end }}
+
+
+

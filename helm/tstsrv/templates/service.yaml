@@ -1,0 +1,20 @@
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kindex.serviceName" . }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    {{- include "kindex.selectorLabels" . | nindent 4 }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.server.bindPort }}
+      targetPort: {{ .Values.server.bindPort }}
+      name: {{if .Values.server.tls }}https{{else}}http{{end}}

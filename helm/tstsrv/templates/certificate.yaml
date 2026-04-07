@@ -1,0 +1,25 @@
+{{ if .Values.server.tls }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "kindex.certificateName" . }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  dnsNames:
+    - {{ include "kindex.serviceName" . }}
+    - {{ include "kindex.serviceName" . }}.{{ .Release.Namespace }}.svc
+    - localhost
+  {{- range .Values.server.hosts }}
+    - "{{ . }}"
+  {{- end }}
+  secretName: {{ include "kindex.certificateSecretName" . }}
+  issuerRef:
+    kind: {{ required "server.issuerKind is not defined while tls: true" .Values.server.issuerKind }}
+    name: {{ required "server.certificateIssuer is not defined while tls: true" .Values.server.certificateIssuer }}
+{{ end }}

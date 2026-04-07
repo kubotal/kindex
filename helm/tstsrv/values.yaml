@@ -1,0 +1,66 @@
+
+
+
+log:
+  mode: "text"
+  level: "INFO"
+
+image:
+  pullSecrets: []
+  pullPolicy: IfNotPresent
+  repository: quay.io/kubosa/exec/kindex
+  # -- Overrides the image tag whose default is the chart appVersion.
+  tag:
+
+server:
+  tls: false
+  hosts: [] # If TLS: fqdn added in certificate
+  certificateIssuer: # TBD if ssl:true
+  issuerKind: ClusterIssuer   # Or Issuer
+  # No obvious reason to change the following
+  bindAddr: "0.0.0.0"
+  bindPort: 7777
+  certDir: /cert/server
+  certName: tls.crt
+  keyName: tls.key
+  dumpExchanges: 0
+  dataFolder: "/"
+
+
+podSecurityContext:
+  # runAsUser: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - "ALL"
+
+commonAnnotations: []
+
+podAnnotations: []
+
+
+extraVolumes: []
+#   - name:
+#     mountPath:
+#     claimName:
+
+resources:
+  limits:
+    memory: 500Mi
+    cpu: "0.4"
+  requests:
+    memory: 500Mi
+    cpu: "0.2"
+
+
+# To allow overriding. But default should be OK
+baseNameOverride:
+certificateName:
+certificateSecretName:
+serviceName:
