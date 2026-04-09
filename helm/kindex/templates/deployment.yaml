@@ -23,6 +23,9 @@ spec:
       labels:
         {{- include "kindex.labels" . | nindent 8 }}
     spec:
+      {{- if or .Values.serviceAccount.create .Values.serviceAccount.name .Values.rbac.create }}
+      serviceAccountName: {{ include "kindex.serviceAccountName" . }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -31,17 +34,26 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: main
         args:
           - serve
-          - {{ .Values.server.dataFolder }}
           - --logMode={{ .Values.log.mode }}
           - --logLevel={{ .Values.log.level }}
           - --tls={{ .Values.server.tls }}
           - --dumpExchanges={{ .Values.server.dumpExchanges }}
           - --bindAddr={{ .Values.server.bindAddr }}
           - --bindPort={{ .Values.server.bindPort }}
+          - --mode={{ .Values.server.mode }}
+          - --clusterName={{ .Values.server.clusterName }}
           {{- if .Values.server.tls }}
           - --certDir={{ .Values.server.certDir }}
           - --certName={{ .Values.server.certName }}

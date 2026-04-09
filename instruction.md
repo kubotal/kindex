@@ -91,5 +91,13 @@ I have added a '--mode' option. Ensure it is either 'dark' or 'light' and adjust
 
 ----
 
+Complete the helm chart by an appropriate rbac.yaml (serviceAccount, role/clusterRole and roleBinding)
+
+----
+
+Redact a user oriented README.md
+
+
+
 - unit tests
 - 

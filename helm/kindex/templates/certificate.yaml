@@ -15,7 +15,8 @@ spec:
     - {{ include "kindex.serviceName" . }}
     - {{ include "kindex.serviceName" . }}.{{ .Release.Namespace }}.svc
     - localhost
-  {{- range .Values.server.hosts }}
+    - {{ .Values.ingress.host }}
+  {{- range .Values.server.extraHosts }}
     - "{{ . }}"
   {{- end }}
   secretName: {{ include "kindex.certificateSecretName" . }}

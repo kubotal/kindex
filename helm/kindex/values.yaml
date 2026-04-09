@@ -1,9 +1,19 @@
 
+# RBAC: list Ingresses in all namespaces (required for the default in-cluster client).
+rbac:
+  create: true
+  # clusterRoleName: ""
+  # clusterRoleBindingName: ""
 
+serviceAccount:
+  create: true
+  # name: ""
 
 log:
   mode: "text"
   level: "INFO"
+
+
 
 image:
   pullSecrets: []
@@ -12,20 +22,39 @@ image:
   # -- Overrides the image tag whose default is the chart appVersion.
   tag:
 
+
+
+ingress:
+  enabled: true
+  host: # TBD
+  class: # TBD
+  networkPolicy:
+    enabled: false
+  annotations:
+    kindex.kubotal.io/link: ""    # Hide ourselves
+    # nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    # haproxy.org/ssl-passthrough: "true"
+    # ingress.kubernetes.io/ssl-passthrough: "true""
+
 server:
   tls: false
-  hosts: [] # If TLS: fqdn added in certificate
+  extraHosts: [] # If TLS: fqdn added in certificate
   certificateIssuer: # TBD if ssl:true
   issuerKind: ClusterIssuer   # Or Issuer
+  mode: dark
+  clusterName: # TBD
   # No obvious reason to change the following
   bindAddr: "0.0.0.0"
-  bindPort: 7777
+  bindPort: 7788
   certDir: /cert/server
   certName: tls.crt
   keyName: tls.key
   dumpExchanges: 0
-  dataFolder: "/"
 
+# NodeSelector for the pod to be installed
+nodeSelector: {}
+# -- Tolerations for the pod to be installed
+tolerations: []
 
 podSecurityContext:
   # runAsUser: 1000
@@ -64,3 +93,8 @@ baseNameOverride:
 certificateName:
 certificateSecretName:
 serviceName:
+ingressName:
+networkPolicyName:
+serviceAccountName:
+clusterRoleName:
+clusterRoleBindingName:

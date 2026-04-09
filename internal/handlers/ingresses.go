@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 Kubotal.
+Copyright (c) 2026 Kubotal.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,17 +46,19 @@ type IngressLink struct {
 type IngressesPageData struct {
 	ClusterName string
 	Version     string
+	Mode        string // "dark" or "light"
 	Links       []IngressLink
 	Error       string
 }
 
 // IngressesHandler lists cluster ingresses and renders link entries.
-func IngressesHandler(client kubernetes.Interface, clusterName string) http.Handler {
+// mode must be "dark" or "light" (validated by the caller).
+func IngressesHandler(client kubernetes.Interface, clusterName, mode string) http.Handler {
 	tpl := template.Must(template.New("ingresses").Parse(ingressesHTML))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		list, err := client.NetworkingV1().Ingresses(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
-		data := IngressesPageData{ClusterName: clusterName, Version: global.Version}
+		data := IngressesPageData{ClusterName: clusterName, Version: global.Version, Mode: mode}
 		if err != nil {
 			data.Error = err.Error()
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

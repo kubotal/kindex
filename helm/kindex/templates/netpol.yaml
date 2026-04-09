@@ -1,0 +1,36 @@
+{{ if .Values.ingress.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "kindex.networkPolicyName" .}}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.commonAnnotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingress:
+    - from:
+      {{ if  eq .Values.ingress.class "nginx" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      {{ else if eq .Values.ingress.class "haproxy" }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-haproxy
+      {{ else }}
+        {{- fail "Unmanaged ingress class" }}
+      {{ end }}
+      ports:
+        - port: {{ .Values.server.bindPort }}
+          protocol: TCP
+  podSelector:
+    matchLabels:
+      {{- include "kindex.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  {{ end }}

@@ -1,17 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-{{.Mode}}">
 <head>
 	<meta charset="utf-8">
 	<meta name="kindex-version" content="{{.Version}}">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="{{.Mode}}">
 	<title>{{if .ClusterName}}{{.ClusterName}} - Ingresses{{else}}Ingresses{{end}}</title>
 	<style>
-		body { font-family: system-ui, sans-serif; margin: 1.5rem; line-height: 1.5; }
+		body { font-family: system-ui, sans-serif; margin: 1.5rem; line-height: 1.5; min-height: 100vh; box-sizing: border-box; }
 		h1.cluster { font-size: 1.35rem; margin: 0 0 0.25rem 0; font-weight: 600; }
-		h2 { font-size: 1.1rem; margin: 0 0 1rem 0; font-weight: 500; color: #333; }
+		h2 { font-size: 1.1rem; margin: 0 0 1rem 0; font-weight: 500; }
 		ul { list-style: none; padding: 0; }
 		li { margin: 0.35rem 0; }
-		.err { color: #b00020; }
+		a { text-decoration: none; }
+		a:hover { text-decoration: underline; }
+
+		html.theme-light body { background: #fafafa; color: #1a1a1a; }
+		html.theme-light h2 { color: #444; }
+		html.theme-light a { color: #0b57d0; }
+		html.theme-light a:visited { color: #681da8; }
+		html.theme-light .muted { color: #555; }
+		html.theme-light .err { color: #b00020; }
+
+		html.theme-dark body { background: #1a1a1e; color: #e8e8ed; }
+		html.theme-dark h2 { color: #a8a8b0; }
+		html.theme-dark a { color: #8ab4ff; }
+		html.theme-dark a:visited { color: #c4a7ff; }
+		html.theme-dark .muted { color: #9aa0a6; }
+		html.theme-dark .err { color: #f28b82; }
 	</style>
 </head>
 <body>
@@ -29,7 +45,7 @@
 		{{range .Links}}
 		<li>
 			<a href="{{.Target}}" rel="noopener noreferrer">{{.Display}}</a>
-			{{if .Description}}<span> — {{.Description}}</span>{{end}}
+			{{if .Description}}<span class="muted"> — {{.Description}}</span>{{end}}
 		</li>
 		{{end}}
 	</ul>

@@ -1,0 +1,56 @@
+{{- if and .Values.rbac.create (not .Values.serviceAccount.create) (not .Values.serviceAccount.name) }}
+{{- fail "rbac.create is true: set serviceAccount.create to true or set serviceAccount.name to an existing ServiceAccount in this namespace" }}
+{{- end }}
+
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kindex.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kindex.clusterRoleName" . }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kindex.clusterRoleBindingName" . }}
+  labels:
+    {{- include "kindex.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "kindex.clusterRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kindex.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

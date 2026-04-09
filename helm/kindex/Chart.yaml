@@ -3,4 +3,4 @@ apiVersion: v2
 name: kindex
 version: 0.1.0-snapshot
 appVersion: 0.1.0-snapshot
-description: "Display all ingresses of a cluster"
+description: "Very simple test server"

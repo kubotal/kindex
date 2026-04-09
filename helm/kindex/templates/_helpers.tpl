@@ -72,3 +72,50 @@ Create the name of the service
 {{- default (printf "%s" (include "kindex.baseName" .)) .Values.serviceName }}
 {{- end }}
 
+{{/*
+Create the name of the ingrss
+*/}}
+{{- define "kindex.ingressName" -}}
+{{- default (printf "%s" (include "kindex.baseName" .)) .Values.ingressName }}
+{{- end }}
+
+{{/*
+Create the name of the ingrss
+*/}}
+{{- define "kindex.networkPolicyName" -}}
+{{- default (printf "allow-%s" (include "kindex.baseName" .)) .Values.networkPolicyName }}
+{{- end }}
+
+{{/*
+Service account name (created when serviceAccount.create, or explicit name for an existing SA).
+*/}}
+{{- define "kindex.serviceAccountName" -}}
+{{- if .Values.serviceAccountName }}
+{{- .Values.serviceAccountName }}
+{{- else }}
+{{- include "kindex.baseName" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+ClusterRole for listing Ingresses across all namespaces (cluster-scoped name).
+*/}}
+{{- define "kindex.clusterRoleName" -}}
+{{- if .Values.clusterRoleName }}
+{{- .Values.clusterRoleName }}
+{{- else }}
+{{- printf "%s-%s-kindex-ingress-reader" .Release.Namespace (include "kindex.baseName" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+
+{{/*
+ClusterRoleBinding tying the ServiceAccount to the ClusterRole.
+*/}}
+{{- define "kindex.clusterRoleBindingName" -}}
+{{- if .Values.clusterRoleBindingName }}
+{{- .Values.clusterRoleBindingName }}
+{{- else }}
+{{- printf "%s-%s-kindex-ingress-crb" .Release.Namespace (include "kindex.baseName" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+

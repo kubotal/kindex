@@ -1,3 +1,19 @@
+/*
+Copyright (c) 2026 Kubotal.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package cmd
 
 import (
@@ -10,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
@@ -20,10 +37,11 @@ import (
 )
 
 var flags struct {
-	logConfig  misc.LogConfig
-	httpConfig httpsrv.Config
-	kubeconfig string
-	mode       string
+	logConfig   misc.LogConfig
+	httpConfig  httpsrv.Config
+	kubeconfig  string
+	mode        string
+	clusterName string
 }
 
 func init() {
@@ -39,7 +57,8 @@ func init() {
 	ServeCmd.PersistentFlags().StringVar(&flags.httpConfig.KeyName, "keyName", "tls.key", "Certificate Directory")
 	ServeCmd.PersistentFlags().StringVarP(&flags.kubeconfig, "kubeconfig", "k", "", "Kubeconfig file (overrides $KUBECONFIG and ~/.kube/config)")
 	//ServeCmd.PersistentFlags().StringArrayVarP(&flags.oidcHttpConfig.AllowedOrigins, "allowedOrigins", "", []string{}, "Allowed Origins")
-	ServeCmd.PersistentFlags().StringVar(&flags.mode, "mode", "dark", "Display mode (dark, light)")
+	ServeCmd.PersistentFlags().StringVar(&flags.mode, "mode", "dark", "Display mode: dark or light")
+	ServeCmd.PersistentFlags().StringVar(&flags.clusterName, "clusterName", "", "Cluster Name")
 
 }
 
@@ -54,7 +73,13 @@ var ServeCmd = &cobra.Command{
 			os.Exit(2)
 		}
 
-		logger.Info("Starting kindex server", "port", flags.httpConfig.BindPort, "version", global.Version, "logLevel", flags.logConfig.Level)
+		mode := strings.ToLower(strings.TrimSpace(flags.mode))
+		if mode != "dark" && mode != "light" {
+			_, _ = fmt.Fprintf(os.Stderr, "--mode must be 'dark' or 'light', got %q\n", flags.mode)
+			os.Exit(2)
+		}
+
+		logger.Info("Starting kindex server", "port", flags.httpConfig.BindPort, "version", global.Version, "logLevel", flags.logConfig.Level, "mode", mode)
 
 		// Kubeconfig resolution (first match wins):
 		// 1) --kubeconfig path
@@ -64,6 +89,9 @@ var ServeCmd = &cobra.Command{
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "kubeconfig: %v\n", err)
 			os.Exit(2)
+		}
+		if flags.clusterName != "" {
+			clusterName = flags.clusterName
 		}
 		clientSet, err := kubernetes.NewForConfig(restCfg)
 		if err != nil {
@@ -77,7 +105,7 @@ var ServeCmd = &cobra.Command{
 		server := httpsrv.New("ingresses", &flags.httpConfig, router)
 		ctx := logr.NewContextWithSlogLogger(context.Background(), logger)
 
-		router.Handle("GET /", handlers.IngressesHandler(clientSet, clusterName))
+		router.Handle("GET /", handlers.IngressesHandler(clientSet, clusterName, mode))
 		router.Handle("GET /favicon.ico", handlers.FaviconHandler(path.Join("resources/static", "favicon.ico")))
 
 		err = server.Start(ctx)
