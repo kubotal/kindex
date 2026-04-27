@@ -97,7 +97,9 @@ Complete the helm chart by an appropriate rbac.yaml (serviceAccount, role/cluste
 
 Redact a user oriented README.md
 
+---
 
+Now, we want also to support Gateway API based ingresses. So, lookup in HTTPRoute and TLSRoute resources and add related entries to the list.
+Support the same annotation.
 
-- unit tests
-- 
+You miss the case where HTTPRoute is using https. I think you should retrieve anc check the associated gateway listener to grab the info.

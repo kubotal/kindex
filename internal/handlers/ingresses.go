@@ -24,8 +24,11 @@ import (
 	"strings"
 
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayversioned "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"kindex/internal/global"
 )
@@ -51,14 +54,16 @@ type IngressesPageData struct {
 	Error       string
 }
 
-// IngressesHandler lists cluster ingresses and renders link entries.
+// IngressesHandler lists cluster Ingresses and Gateway API HTTPRoutes / TLSRoutes, then renders link entries.
 // mode must be "dark" or "light" (validated by the caller).
-func IngressesHandler(client kubernetes.Interface, clusterName, mode string) http.Handler {
+// gw may be nil if the Gateway API client could not be constructed; Gateway routes are skipped in that case.
+func IngressesHandler(client kubernetes.Interface, gw gatewayversioned.Interface, clusterName, mode string) http.Handler {
 	tpl := template.Must(template.New("ingresses").Parse(ingressesHTML))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		list, err := client.NetworkingV1().Ingresses(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 		data := IngressesPageData{ClusterName: clusterName, Version: global.Version, Mode: mode}
+
+		list, err := client.NetworkingV1().Ingresses(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			data.Error = err.Error()
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -70,6 +75,47 @@ func IngressesHandler(client kubernetes.Interface, clusterName, mode string) htt
 		for i := range list.Items {
 			links = append(links, linksForIngress(&list.Items[i])...)
 		}
+
+		if gw != nil {
+			gatewaysByKey := make(map[string]*gatewayv1.Gateway)
+			if gwl, err := gw.GatewayV1().Gateways(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
+				for i := range gwl.Items {
+					k := gwl.Items[i].Namespace + "/" + gwl.Items[i].Name
+					gatewaysByKey[k] = &gwl.Items[i]
+				}
+			} else if !isGatewayAPIMissing(err) {
+				data.Error = err.Error()
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = tpl.Execute(w, data)
+				return
+			}
+
+			if hr, err := gw.GatewayV1().HTTPRoutes(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
+				for i := range hr.Items {
+					links = append(links, linksForHTTPRoute(&hr.Items[i], gatewaysByKey)...)
+				}
+			} else if !isGatewayAPIMissing(err) {
+				data.Error = err.Error()
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = tpl.Execute(w, data)
+				return
+			}
+
+			if tr, err := gw.GatewayV1alpha2().TLSRoutes(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
+				for i := range tr.Items {
+					links = append(links, linksForTLSRoute(&tr.Items[i])...)
+				}
+			} else if !isGatewayAPIMissing(err) {
+				data.Error = err.Error()
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = tpl.Execute(w, data)
+				return
+			}
+		}
+
 		sort.Slice(links, func(i, j int) bool {
 			return strings.ToLower(links[i].Display) < strings.ToLower(links[j].Display)
 		})
@@ -77,6 +123,18 @@ func IngressesHandler(client kubernetes.Interface, clusterName, mode string) htt
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = tpl.Execute(w, data)
 	})
+}
+
+func isGatewayAPIMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	if meta.IsNoMatchError(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "could not find the requested resource") ||
+		strings.Contains(msg, "the server doesn't have a resource type")
 }
 
 func isLinkAnnotationKey(k string) bool {
@@ -97,9 +155,12 @@ func isLinkAnnotationKey(k string) bool {
 	}
 }
 
-func linkAnnotations(ing *networkingv1.Ingress) map[string]string {
+func linkAnnotationValues(annotations map[string]string) map[string]string {
+	if annotations == nil {
+		return nil
+	}
 	out := make(map[string]string)
-	for k, v := range ing.Annotations {
+	for k, v := range annotations {
 		if isLinkAnnotationKey(k) {
 			out[k] = v
 		}
@@ -135,8 +196,8 @@ func hostInTLSSpec(ing *networkingv1.Ingress, host string) bool {
 	return false
 }
 
-func sslPassthrough(ing *networkingv1.Ingress) bool {
-	if ing.Annotations == nil {
+func sslPassthroughFromAnnotations(annotations map[string]string) bool {
+	if annotations == nil {
 		return false
 	}
 	for _, key := range []string{
@@ -144,7 +205,7 @@ func sslPassthrough(ing *networkingv1.Ingress) bool {
 		"ingress.kubernetes.io/ssl-passthrough",
 		"haproxy.org/ssl-passthrough",
 	} {
-		if strings.EqualFold(ing.Annotations[key], "true") {
+		if strings.EqualFold(annotations[key], "true") {
 			return true
 		}
 	}
@@ -152,7 +213,7 @@ func sslPassthrough(ing *networkingv1.Ingress) bool {
 }
 
 func schemeForHost(ing *networkingv1.Ingress, host string) string {
-	if hostInTLSSpec(ing, host) || sslPassthrough(ing) {
+	if hostInTLSSpec(ing, host) || sslPassthroughFromAnnotations(ing.Annotations) {
 		return "https"
 	}
 	return "http"
@@ -168,56 +229,24 @@ func joinHostPath(host, path string) string {
 	return host + path
 }
 
-func buildTarget(ing *networkingv1.Ingress, host, path string) string {
-	s := schemeForHost(ing, host)
-	return s + "://" + joinHostPath(host, path)
+func buildURLFromScheme(scheme, host, path string) string {
+	return scheme + "://" + joinHostPath(host, path)
 }
 
 func linksForIngress(ing *networkingv1.Ingress) []IngressLink {
 	host := firstIngressHost(ing)
-	ann := linkAnnotations(ing)
+	ann := linkAnnotationValues(ing.Annotations)
 
 	if len(ann) > 0 {
-		keys := make([]string, 0, len(ann))
-		for k := range ann {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var out []IngressLink
-		for _, k := range keys {
-			v := ann[k]
-			if v == "" {
-				continue
-			}
-			parts := strings.SplitN(v, ":", 3)
-			display := parts[0]
-			var path, desc string
-			if len(parts) > 1 {
-				path = parts[1]
-			}
-			if len(parts) > 2 {
-				desc = parts[2]
-			}
-			if host == "" {
-				continue
-			}
-			if display == "" {
-				display = displayFromHost(host)
-			}
-			out = append(out, IngressLink{
-				Display:     display,
-				Target:      buildTarget(ing, host, path),
-				Description: desc,
-			})
-		}
-		return out
+		return linksFromAnnotationMap(host, ann, schemeForHost(ing, host))
 	}
 
 	if host == "" {
 		return nil
 	}
+	scheme := schemeForHost(ing, host)
 	return []IngressLink{{
 		Display: displayFromHost(host),
-		Target:  buildTarget(ing, host, ""),
+		Target:  buildURLFromScheme(scheme, host, ""),
 	}}
 }

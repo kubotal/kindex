@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	gatewayversioned "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
 var flags struct {
@@ -79,7 +80,7 @@ var ServeCmd = &cobra.Command{
 			os.Exit(2)
 		}
 
-		logger.Info("Starting kindex server", "port", flags.httpConfig.BindPort, "version", global.Version, "logLevel", flags.logConfig.Level, "mode", mode)
+		logger.Info("Starting kindex server", "port", flags.httpConfig.BindPort, "version", global.Version, "build", global.BuildTs, "logLevel", flags.logConfig.Level, "mode", mode)
 
 		// Kubeconfig resolution (first match wins):
 		// 1) --kubeconfig path
@@ -99,13 +100,20 @@ var ServeCmd = &cobra.Command{
 			os.Exit(2)
 		}
 
+		var gwClient gatewayversioned.Interface
+		gwClient, err = gatewayversioned.NewForConfig(restCfg)
+		if err != nil {
+			logger.Info("gateway-api client unavailable; HTTPRoute/TLSRoute links disabled", "error", err)
+			gwClient = nil
+		}
+
 		router := http.NewServeMux()
 
 		// Setup server
 		server := httpsrv.New("ingresses", &flags.httpConfig, router)
 		ctx := logr.NewContextWithSlogLogger(context.Background(), logger)
 
-		router.Handle("GET /", handlers.IngressesHandler(clientSet, clusterName, mode))
+		router.Handle("GET /", handlers.IngressesHandler(clientSet, gwClient, clusterName, mode))
 		router.Handle("GET /favicon.ico", handlers.FaviconHandler(path.Join("resources/static", "favicon.ico")))
 
 		err = server.Start(ctx)
