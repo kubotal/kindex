@@ -54,7 +54,7 @@ type IngressesPageData struct {
 	Error       string
 }
 
-// IngressesHandler lists cluster Ingresses and Gateway API HTTPRoutes / TLSRoutes, then renders link entries.
+// IngressesHandler lists cluster Ingresses and Gateway API HTTPRoutes and TLSRoutes (v1 and v1alpha2), then renders link entries.
 // mode must be "dark" or "light" (validated by the caller).
 // gw may be nil if the Gateway API client could not be constructed; Gateway routes are skipped in that case.
 func IngressesHandler(client kubernetes.Interface, gw gatewayversioned.Interface, clusterName, mode string) http.Handler {
@@ -103,9 +103,22 @@ func IngressesHandler(client kubernetes.Interface, gw gatewayversioned.Interface
 				return
 			}
 
+			if tr, err := gw.GatewayV1().TLSRoutes(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
+				for i := range tr.Items {
+					links = append(links, linksForTLSRouteV1(&tr.Items[i])...)
+				}
+			} else if !isGatewayAPIMissing(err) {
+				data.Error = err.Error()
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = tpl.Execute(w, data)
+				return
+			}
+
+			// Older Gateway API installs may only expose TLSRoute as v1alpha2.
 			if tr, err := gw.GatewayV1alpha2().TLSRoutes(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err == nil {
 				for i := range tr.Items {
-					links = append(links, linksForTLSRoute(&tr.Items[i])...)
+					links = append(links, linksForTLSRouteAlpha2(&tr.Items[i])...)
 				}
 			} else if !isGatewayAPIMissing(err) {
 				data.Error = err.Error()
@@ -116,6 +129,7 @@ func IngressesHandler(client kubernetes.Interface, gw gatewayversioned.Interface
 			}
 		}
 
+		links = dedupeIngressLinks(links)
 		sort.Slice(links, func(i, j int) bool {
 			return strings.ToLower(links[i].Display) < strings.ToLower(links[j].Display)
 		})
@@ -123,6 +137,23 @@ func IngressesHandler(client kubernetes.Interface, gw gatewayversioned.Interface
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = tpl.Execute(w, data)
 	})
+}
+
+func dedupeIngressLinks(links []IngressLink) []IngressLink {
+	if len(links) < 2 {
+		return links
+	}
+	seen := make(map[string]struct{}, len(links))
+	out := make([]IngressLink, 0, len(links))
+	for _, l := range links {
+		key := l.Target + "\x00" + l.Display + "\x00" + l.Description
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, l)
+	}
+	return out
 }
 
 func isGatewayAPIMissing(err error) bool {

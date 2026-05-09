@@ -103,3 +103,11 @@ Now, we want also to support Gateway API based ingresses. So, lookup in HTTPRout
 Support the same annotation.
 
 You miss the case where HTTPRoute is using https. I think you should retrieve anc check the associated gateway listener to grab the info.
+
+---
+You miss 
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+
+---
+I still need support of old GatewayAPI version. So rollback your modif and ADD support for latest version (ADD, Not replace)

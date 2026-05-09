@@ -162,17 +162,6 @@ func firstHTTPRouteHostname(hostnames []gatewayv1.Hostname) string {
 	return ""
 }
 
-func firstTLSRouteHostname(hostnames []gatewayv1alpha2.Hostname) string {
-	for _, h := range hostnames {
-		s := string(h)
-		if s == "" || strings.HasPrefix(s, "*.") {
-			continue
-		}
-		return s
-	}
-	return ""
-}
-
 func linksForHTTPRoute(route *gatewayv1.HTTPRoute, gateways map[string]*gatewayv1.Gateway) []IngressLink {
 	host := firstHTTPRouteHostname(route.Spec.Hostnames)
 	ann := linkAnnotationValues(route.Annotations)
@@ -189,8 +178,36 @@ func linksForHTTPRoute(route *gatewayv1.HTTPRoute, gateways map[string]*gatewayv
 	}}
 }
 
-func linksForTLSRoute(route *gatewayv1alpha2.TLSRoute) []IngressLink {
-	host := firstTLSRouteHostname(route.Spec.Hostnames)
+func linksForTLSRouteV1(route *gatewayv1.TLSRoute) []IngressLink {
+	host := firstHTTPRouteHostname(route.Spec.Hostnames)
+	ann := linkAnnotationValues(route.Annotations)
+	scheme := schemeTLSRouteString()
+	if len(ann) > 0 {
+		return linksFromAnnotationMap(host, ann, scheme)
+	}
+	if host == "" {
+		return nil
+	}
+	return []IngressLink{{
+		Display: displayFromHost(host),
+		Target:  buildURLFromScheme(scheme, host, ""),
+	}}
+}
+
+func firstTLSRouteAlpha2Hostname(hostnames []gatewayv1alpha2.Hostname) string {
+	for _, h := range hostnames {
+		s := string(h)
+		if s == "" || strings.HasPrefix(s, "*.") {
+			continue
+		}
+		return s
+	}
+	return ""
+}
+
+// linksForTLSRouteAlpha2 handles gateway.networking.k8s.io/v1alpha2 TLSRoute (older clusters).
+func linksForTLSRouteAlpha2(route *gatewayv1alpha2.TLSRoute) []IngressLink {
+	host := firstTLSRouteAlpha2Hostname(route.Spec.Hostnames)
 	ann := linkAnnotationValues(route.Annotations)
 	scheme := schemeTLSRouteString()
 	if len(ann) > 0 {
